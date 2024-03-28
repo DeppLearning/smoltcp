@@ -878,8 +878,7 @@ impl InterfaceInner {
                 #[cfg(feature = "proto-ipv6")]
                 IpCidr::Ipv6(a) => Some(a),
             })
-            .find(|a| is_candidate_source_address(dst_addr, &a.address()))
-            .unwrap();
+            .find(|a| is_candidate_source_address(dst_addr, &a.address()));
 
         for addr in self.ip_addrs.iter().filter_map(|a| match a {
             #[cfg(feature = "proto-ipv4")]
@@ -887,22 +886,25 @@ impl InterfaceInner {
             #[cfg(feature = "proto-ipv6")]
             IpCidr::Ipv6(a) => Some(a),
         }) {
+            if candidate.is_none() {
+                candidate = Some(addr);
+            }
             if !is_candidate_source_address(dst_addr, &addr.address()) {
                 continue;
             }
 
             // Rule 1: prefer the address that is the same as the output destination address.
-            if candidate.address() != *dst_addr && addr.address() == *dst_addr {
-                candidate = addr;
+            if candidate.unwrap().address()!= *dst_addr && addr.address() == *dst_addr {
+                candidate = Some(addr);
             }
 
             // Rule 2: prefer appropriate scope.
-            if (candidate.address().scope() as u8) < (addr.address().scope() as u8) {
-                if (candidate.address().scope() as u8) < (dst_addr.scope() as u8) {
-                    candidate = addr;
+            if (candidate.unwrap().address().scope() as u8) < (addr.address().scope() as u8) {
+                if (candidate.unwrap().address().scope() as u8) < (dst_addr.scope() as u8) {
+                    candidate = Some(addr);
                 }
             } else if (addr.address().scope() as u8) > (dst_addr.scope() as u8) {
-                candidate = addr;
+                candidate = Some(addr);
             }
 
             // Rule 3: avoid deprecated addresses (TODO)
@@ -912,12 +914,12 @@ impl InterfaceInner {
             // Rule 6: prefer matching label (TODO)
             // Rule 7: prefer temporary addresses (TODO)
             // Rule 8: use longest matching prefix
-            if common_prefix_length(candidate, dst_addr) < common_prefix_length(addr, dst_addr) {
-                candidate = addr;
+            if common_prefix_length(candidate.unwrap(), dst_addr) < common_prefix_length(addr, dst_addr) {
+                candidate = Some(addr);
             }
         }
 
-        Some(candidate.address())
+        candidate.map(|x| x.address())
     }
 
     #[cfg(test)]
